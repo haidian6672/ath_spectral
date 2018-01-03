@@ -8,10 +8,17 @@
 #include <QtEndian>
 #include <QDebug>
 #include <QKeyEvent>
+#include <QTimer>
 
 #include <qwt_plot.h>
 #include <qwt_legend.h>
 #include <qmath.h>
+
+namespace {
+    const QString kSamplesDir("/home/test/ath-spectral-scan/samples/test/");
+    const quint32 kRefrshInterval = 1000; // 1s
+}
+
 
 AthScan::AthScan(QWidget *parent) :
     QMainWindow(parent),
@@ -80,6 +87,10 @@ AthScan::AthScan(QWidget *parent) :
     _borderH->attach(ui->fftPlot);
 
     ui->fftPlot->insertLegend(new QwtLegend());
+
+    _refresh_timer = new QTimer();
+    connect(_refresh_timer, SIGNAL(timeout()), this, SLOT(open_scan_file()));
+    _refresh_timer->start(kRefrshInterval);
 }
 
 AthScan::~AthScan()
@@ -148,7 +159,7 @@ int AthScan::parse_scan_file(QString file_name)
         if (!data)
             continue;
         data->next = NULL;
-        data->data = new(quint8[len]);
+        data->data = new quint8[len];
         if (!data->data)
             continue;
 
@@ -201,8 +212,10 @@ int AthScan::parse_scan_file(QString file_name)
 
 int AthScan::scale_axis()
 {
-    qint32 minFreq = ui->minFreqSpinBox->value();
-    qint32 maxFreq = (minFreq > ui->maxFreqSpinBox->value()) ?  minFreq + 20 : ui->maxFreqSpinBox->value();
+    // qint32 minFreq = ui->minFreqSpinBox->value();
+    // qint32 maxFreq = (minFreq > ui->maxFreqSpinBox->value()) ?  minFreq + 20 : ui->maxFreqSpinBox->value();
+    qint32 minFreq = _min_freq;
+    qint32 maxFreq = _max_freq;
     qint32 minPwr = ui->minPwrSpinBox->value();
     qint32 maxPwr = (minPwr > ui->maxPwrSpinBox->value()) ?  minPwr + 2 : ui->maxPwrSpinBox->value();
     quint32 x_border = (minFreq + maxFreq) / 2;
@@ -286,16 +299,16 @@ int AthScan::compute_bin_pwr(fft_sample_tlv *tlv, QPolygonF &sample)
 
 int AthScan::draw_spectrum(quint32 min_freq, quint32 max_freq)
 {
-    QPolygonF fft_samples;
-
     _fft_curve = new QwtPlotCurve();
-    _fft_curve->setTitle(_label);
+    _fft_curve_vec += _fft_curve;
+    // _fft_curve->setTitle(_label);
     _fft_curve->setPen(Qt::green, 2);
     _fft_curve->setStyle(QwtPlotCurve::Dots);
 
     ui->minFreqSpinBox->setValue(min_freq);
     ui->maxFreqSpinBox->setValue(max_freq);
 
+    QPolygonF fft_samples;
     for (scan_sample *data = _fft_data; data; data = data->next)
         compute_bin_pwr((fft_sample_tlv *) data->data, fft_samples);
 
@@ -314,26 +327,46 @@ int AthScan::draw_spectrum(quint32 min_freq, quint32 max_freq)
 
 int AthScan::open_scan_file()
 {
-    QString file = QFileDialog::getOpenFileName(this, tr("Open File"), "", tr(""));
-    if (!file.isEmpty()) {
-        if (parse_scan_file(file) < 0) {
-            QMessageBox::information(0,"error","error parsing fft data");
-            return -1;
+    // QString file = QFileDialog::getOpenFileName(this, tr("Open File"), "", tr(""));
+    QDir spectral_scan_results(kSamplesDir);
+    if (!spectral_scan_results.exists()) {
+        QMessageBox::information(0, "error", "samples dir not exists.");
+    }
+    spectral_scan_results.setSorting(QDir::Time);
+    QStringList name_filters("test*");
+    spectral_scan_results.setNameFilters(name_filters);
+    QStringList scan_results = spectral_scan_results.entryList();
+    QStringList new_scan_results;
+    for (const QString result : scan_results) {
+        if (!_old_scan_results.contains(result)) {
+            new_scan_results.append(result);
+        } else {
+            break;
         }
-        _label = QFileInfo(file).fileName();
-        qint32 idx = _label.lastIndexOf(".");
-        if (idx >= 0)
-            _label.chop(_label.size() - idx);
-        draw_spectrum(_min_freq, _max_freq);
+    }
+
+    for (const QString new_result : new_scan_results) {
+        QFileInfo file_info(kSamplesDir + new_result);
+        if (!file_info.exists()) {
+            QMessageBox::information(0, "error", "file not exist.");
+        } else {
+            if (parse_scan_file(file_info.absoluteFilePath()) < 0) {
+                QMessageBox::information(0, "error", "error parsing fft data");
+                return -1;
+            }
+            _old_scan_results.append(new_result);
+            _label = QFileInfo(new_result).fileName();
+            qint32 idx = _label.lastIndexOf(".");
+            if (idx >= 0)
+                _label.chop(_label.size() - idx);
+            draw_spectrum(_min_freq, _max_freq);
+        }
     }
     return 0;
 }
 
 int AthScan::clear()
 {
-    _min_freq = 2400;
-    _max_freq = 6000;
-
     while (_fft_data) {
         struct scan_sample *fft_ptr = _fft_data;
         _fft_data = _fft_data->next;
@@ -341,11 +374,11 @@ int AthScan::clear()
         free(fft_ptr);
     }
 
-    if (_fft_curve)
-        _fft_curve->detach();
-
-    ui->minFreqSpinBox->setValue(_min_freq);
-    ui->maxFreqSpinBox->setValue(_max_freq);
+    for (QwtPlotCurve *curve : _fft_curve_vec) {
+        if (curve) {
+            curve->detach();
+        }
+    }
 
     scale_axis();
 

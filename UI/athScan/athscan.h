@@ -113,12 +113,17 @@ private:
     QwtPlotGrid *_grid;
     QwtPlotMarker *_borderV, *_borderH;
     QwtPlotCurve *_fft_curve;
+    QVector<QwtPlotCurve *> _fft_curve_vec;
 
     Ui::AthScan *ui;
     struct scan_sample *_fft_data;
 
     QString _label;
     quint32 _min_freq, _max_freq;
+
+    QStringList _old_scan_results;
+
+    QTimer *_refresh_timer;
 };
 
 #endif // ATHSCAN_H
