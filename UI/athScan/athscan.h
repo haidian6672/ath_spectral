@@ -112,7 +112,7 @@ private:
     QwtPlotCanvas *_canvas;
     QwtPlotGrid *_grid;
     QwtPlotMarker *_borderV, *_borderH;
-    QwtPlotCurve *_fft_curve;
+    QVector<QwtPlotCurve *> _fft_curve_vec;
 
     Ui::AthScan *ui;
     struct scan_sample *_fft_data;

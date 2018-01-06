@@ -19,7 +19,6 @@ AthScan::AthScan(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    _fft_curve = NULL;
     _fft_data = NULL;
     _min_freq = 2400;
     _max_freq = 6000;
@@ -148,7 +147,7 @@ int AthScan::parse_scan_file(QString file_name)
         if (!data)
             continue;
         data->next = NULL;
-        data->data = new(quint8[len]);
+        data->data = new quint8[len];
         if (!data->data)
             continue;
 
@@ -286,21 +285,21 @@ int AthScan::compute_bin_pwr(fft_sample_tlv *tlv, QPolygonF &sample)
 
 int AthScan::draw_spectrum(quint32 min_freq, quint32 max_freq)
 {
-    QPolygonF fft_samples;
-
-    _fft_curve = new QwtPlotCurve();
-    _fft_curve->setTitle(_label);
-    _fft_curve->setPen(Qt::green, 2);
-    _fft_curve->setStyle(QwtPlotCurve::Dots);
+    QwtPlotCurve *fft_curve = new QwtPlotCurve();
+    _fft_curve_vec += fft_curve;
+    fft_curve->setTitle(_label);
+    fft_curve->setPen(Qt::green, 2);
+    fft_curve->setStyle(QwtPlotCurve::Dots);
 
     ui->minFreqSpinBox->setValue(min_freq);
     ui->maxFreqSpinBox->setValue(max_freq);
 
+    QPolygonF fft_samples;
     for (scan_sample *data = _fft_data; data; data = data->next)
         compute_bin_pwr((fft_sample_tlv *) data->data, fft_samples);
 
-    _fft_curve->setSamples(fft_samples);
-    _fft_curve->attach(ui->fftPlot);
+    fft_curve->setSamples(fft_samples);
+    fft_curve->attach(ui->fftPlot);
 
     _borderV->setValue((min_freq + max_freq) / 2, (ui->minPwrSpinBox->value() + ui->maxPwrSpinBox->value()) / 2);
     _borderH->setValue((min_freq + max_freq) / 2, (ui->minPwrSpinBox->value() + ui->maxPwrSpinBox->value()) / 2);
@@ -326,14 +325,12 @@ int AthScan::open_scan_file()
             _label.chop(_label.size() - idx);
         draw_spectrum(_min_freq, _max_freq);
     }
+
     return 0;
 }
 
 int AthScan::clear()
 {
-    _min_freq = 2400;
-    _max_freq = 6000;
-
     while (_fft_data) {
         struct scan_sample *fft_ptr = _fft_data;
         _fft_data = _fft_data->next;
@@ -341,9 +338,14 @@ int AthScan::clear()
         free(fft_ptr);
     }
 
-    if (_fft_curve)
-        _fft_curve->detach();
+    for (QwtPlotCurve *curve : _fft_curve_vec) {
+        if (curve) {
+            curve->detach();
+        }
+    }
 
+    _min_freq = 2400;
+    _max_freq = 6000;
     ui->minFreqSpinBox->setValue(_min_freq);
     ui->maxFreqSpinBox->setValue(_max_freq);
 
