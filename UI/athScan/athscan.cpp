@@ -33,6 +33,8 @@ AthScan::AthScan(QWidget *parent) :
 
     connect(ui->closeButton, SIGNAL(clicked()), this, SLOT(close()));
     connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(clear()));
+    connect(ui->startButton, SIGNAL(clicked()), this, SLOT(onStartClicked()));
+    connect(ui->stopButton, SIGNAL(clicked()), this, SLOT(onStopClicked()));
     connect(ui->openButton, SIGNAL(clicked()), this, SLOT(open_scan_file()));
     connect(ui->minFreqSpinBox, SIGNAL(editingFinished()),this, SLOT(scale_axis()));
     connect(ui->maxFreqSpinBox, SIGNAL(editingFinished()), this, SLOT(scale_axis()));
@@ -87,15 +89,23 @@ AthScan::AthScan(QWidget *parent) :
     _borderH->attach(ui->fftPlot);
 
     ui->fftPlot->insertLegend(new QwtLegend());
-
-    _refresh_timer = new QTimer();
-    connect(_refresh_timer, SIGNAL(timeout()), this, SLOT(open_scan_file()));
-    _refresh_timer->start(kRefrshInterval);
 }
 
 AthScan::~AthScan()
 {
     delete ui;
+}
+
+void AthScan::onStartClicked()
+{
+    _refresh_timer = new QTimer();
+    connect(_refresh_timer, SIGNAL(timeout()), this, SLOT(start_auto_parse()));
+    _refresh_timer->start(kRefrshInterval);
+}
+
+void AthScan::onStopClicked()
+{
+    _refresh_timer->stop();
 }
 
 void AthScan::set_label(QwtPlotMarker *marker, QString label)
@@ -325,7 +335,7 @@ int AthScan::draw_spectrum(quint32 min_freq, quint32 max_freq)
     return 0;
 }
 
-int AthScan::open_scan_file()
+int AthScan::start_auto_parse()
 {
     // QString file = QFileDialog::getOpenFileName(this, tr("Open File"), "", tr(""));
     QDir spectral_scan_results(kSamplesDir);
@@ -355,12 +365,30 @@ int AthScan::open_scan_file()
                 return -1;
             }
             _old_scan_results.append(new_result);
-            _label = QFileInfo(new_result).fileName();
-            qint32 idx = _label.lastIndexOf(".");
-            if (idx >= 0)
-                _label.chop(_label.size() - idx);
+            // _label = QFileInfo(new_result).fileName();
+            // qint32 idx = _label.lastIndexOf(".");
+            // if (idx >= 0)
+            //     _label.chop(_label.size() - idx);
             draw_spectrum(_min_freq, _max_freq);
         }
+    }
+
+    return 0;
+}
+
+int AthScan::open_scan_file()
+{
+    QString file = QFileDialog::getOpenFileName(this, tr("Open File"), "", tr(""));
+    if (!file.isEmpty()) {
+        if (parse_scan_file(file) < 0) {
+            QMessageBox::information(0,"error","error parsing fft data");
+            return -1;
+        }
+        // _label = QFileInfo(file).fileName();
+        // qint32 idx = _label.lastIndexOf(".");
+        // if (idx >= 0)
+        //     _label.chop(_label.size() - idx);
+        draw_spectrum(_min_freq, _max_freq);
     }
     return 0;
 }

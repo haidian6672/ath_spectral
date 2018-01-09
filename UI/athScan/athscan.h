@@ -100,7 +100,10 @@ private slots:
     int clear();
     int close();
     int open_scan_file();
+    int start_auto_parse();
     int scale_axis();
+    void onStartClicked();
+    void onStopClicked();
 
 private:
     int parse_scan_file(QString);
@@ -118,7 +121,7 @@ private:
     Ui::AthScan *ui;
     struct scan_sample *_fft_data;
 
-    QString _label;
+    // QString _label;
     quint32 _min_freq, _max_freq;
 
     QStringList _old_scan_results;
